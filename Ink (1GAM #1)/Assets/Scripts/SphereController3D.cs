@@ -2,10 +2,10 @@
 
 public class SphereController3D : MonoBehaviour
 {
-    public float RollSpeedModifier, FastRollSpeedModifier;
-
     public Camera MainCam;
-    public Vector3 GrowthRate;
+    public Vector3 GrowthRate, ShrinkRate, MaxScale, MinScale; // Make mzx/minscales a float
+
+    public float RollSpeedModifier, FastRollSpeedModifier;
 
     private Material _ballMaterial;
     private Rigidbody _ballRB;
@@ -13,59 +13,68 @@ public class SphereController3D : MonoBehaviour
     private Color _inkSpotColor;
     public Color InkSpotColor { get { return _inkSpotColor;  } set { _inkSpotColor = value; } }
 
-    private bool _spaceHeld, _inInkSpot;
+    private bool _inInkSpot;
     public bool InInkSpot { get {return _inInkSpot;} set{_inInkSpot = value;} }
+    private bool _destroyMe;
+    public bool DestroyMe { get { return _destroyMe; } set { _destroyMe = value; } }
 
     void Awake()
     {
         _ballMaterial = GetComponent<MeshRenderer>().materials[0];
         _ballRB = GetComponent<Rigidbody>();
-        _spaceHeld = _inInkSpot = false;
+        _inInkSpot = false;
     }
 
     void FixedUpdate()
     {
-        if (gameObject.transform.position.y <= 1f)
+        if (_destroyMe)
         {
-            float forwardSpeed = Input.GetAxis("Vertical");
-            float sideSpeed = Input.GetAxis("Horizontal");
-            Vector3 speed = new Vector3(sideSpeed, 0, forwardSpeed);
-            Roll(speed, forwardSpeed);
+            DestroyInkBall();
         }
 
-        if (_inInkSpot)
+        float forwardSpeed = Input.GetAxis("Vertical");
+        float sideSpeed = Input.GetAxis("Horizontal");
+        Vector3 speed = new Vector3(sideSpeed, 0, forwardSpeed);
+        Roll(speed);
+
+        if (_inInkSpot && transform.localScale.x <= MaxScale.x)
         {
-            Debug.Log("In ink spot");       // DEBUG
             AbsorbInk();
-        }
-        // DEBUG
-        else
-        {
-            Debug.Log("Not in ink spot");
         }
     }
 
-    private void Roll(Vector3 direction, float turn)
+    private void Roll(Vector3 direction)
     {
-        Debug.Log(_ballRB.velocity);
-        if (Input.GetKey(KeyCode.Space))
+        if (Input.GetAxis("Roll Fast") > 0)
         {
-            _spaceHeld = true;
             _ballRB.AddForce(direction * FastRollSpeedModifier, ForceMode.Acceleration);
+            if (_ballRB.velocity != Vector3.zero)
+            {
+                transform.localScale -= ShrinkRate * (Mathf.Abs(_ballRB.velocity.x) + Mathf.Abs(_ballRB.velocity.z)) * 0.05f;
+            }
         }
         else
         {
-            _spaceHeld = false;
             _ballRB.AddForce(direction * RollSpeedModifier, ForceMode.Acceleration);
+            // Shrink by regular rate
+            if (_ballRB.velocity != Vector3.zero)
+            {
+                transform.localScale -= ShrinkRate * (Mathf.Abs(_ballRB.velocity.x) + Mathf.Abs(_ballRB.velocity.z)) * 0.01f;
+            }
         }
+        _destroyMe = (transform.localScale.x <= MinScale.x) ? true : false;
     }
 
     private void AbsorbInk()
     {
-        // Growth rate should be slowed down as ball gets larger
-        transform.localScale += GrowthRate;
-        _ballMaterial.color = Color.Lerp(_ballMaterial.color, _inkSpotColor, Time.deltaTime);
+        float growthModifier = 1 / transform.localScale.x;
+        transform.localScale += GrowthRate * growthModifier;
+        _ballMaterial.color = Color.Lerp(_ballMaterial.color, _inkSpotColor, Time.deltaTime * 2f);
+    }
+
+    private void DestroyInkBall()
+    {
+        Destroy(gameObject);
+        GameObject.FindGameObjectWithTag("GameController").GetComponent<GameController>().GameOver = true;
     }
 }
-
-// TODO: increase/decrease drag with size (smaller more, counterintuitive)
